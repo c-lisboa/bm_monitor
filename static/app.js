@@ -1,10 +1,8 @@
 const API_BASE = '/api';
-const tabs = new Map(); // tg -> { panel, body, lastTimestamp, pollInterval, seenEntries: Set }
-let currentServer = '';
+const tabs = new Map(); // tg -> { tab, panel, body, lastTimestamp, pollInterval, seenEntries }
 let currentTG = '';
 let ttsEnabled = true;
 
-const serverSelect = document.getElementById('serverSelect');
 const tgInput = document.getElementById('tgInput');
 const btnAddTG = document.getElementById('btnAddTG');
 const btnClear = document.getElementById('btnClear');
@@ -15,25 +13,24 @@ const addTabBtn = document.getElementById('addTabBtn');
 const currentTGEl = document.getElementById('currentTG');
 const lastUpdateEl = document.getElementById('lastUpdate');
 const entryCountEl = document.getElementById('entryCount');
-const currentServerEl = document.getElementById('currentServer');
 
 const POLL_INTERVAL_MS = 5000;
 
 function init() {
-    currentServer = serverSelect.value;
     currentTG = '';
-    
-    serverSelect.addEventListener('change', onServerChange);
+
     btnAddTG.addEventListener('click', addTG);
     btnClear.addEventListener('click', clearCurrentTab);
     btnTTS.addEventListener('click', toggleTTS);
-    tgInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addTG(); });
+    tgInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addTG();
+    });
     addTabBtn.addEventListener('click', () => tgInput.focus());
-    
+
     tgTabs.addEventListener('click', (e) => {
         const tab = e.target.closest('.tg-tab');
-        if (!tab) return;
-        if (tab.classList.contains('add-tab')) return;
+        if (!tab || tab.classList.contains('add-tab')) return;
+
         if (e.target.classList.contains('close-tab')) {
             e.stopPropagation();
             removeTG(tab.dataset.tg);
@@ -41,31 +38,20 @@ function init() {
             switchTab(tab.dataset.tg);
         }
     });
-    
-    currentServerEl.textContent = currentServer;
+
     currentTGEl.textContent = 'Nenhuma TG selecionada';
     entryCountEl.textContent = '0 entradas';
-}
-
-function onServerChange() {
-    currentServer = serverSelect.value;
-    currentServerEl.textContent = currentServer;
-    tabs.forEach((data, tg) => {
-        data.lastTimestamp = 0;
-        data.body.innerHTML = '';
-        data.seenEntries.clear();
-        updateEntryCount(tg);
-        fetchDataForTG(tg);
-    });
 }
 
 function addTG() {
     const tg = tgInput.value.trim();
     if (!tg) return alert('Digite uma TG válida');
+
     if (tabs.has(tg)) {
         switchTab(tg);
         return;
     }
+
     createTab(tg, true);
     tgInput.value = '';
 }
@@ -76,7 +62,7 @@ function createTab(tg, makeActive = false) {
     tab.dataset.tg = tg;
     tab.innerHTML = `TG ${tg} <span class="close-tab">×</span>`;
     tgTabs.insertBefore(tab, addTabBtn);
-    
+
     const panel = document.createElement('div');
     panel.className = 'tab-panel' + (makeActive ? ' active' : '');
     panel.dataset.tg = tg;
@@ -98,9 +84,9 @@ function createTab(tg, makeActive = false) {
         </table>
     `;
     tabPanels.appendChild(panel);
-    
+
     const body = panel.querySelector('.heardBody');
-    
+
     tabs.set(tg, {
         tab,
         panel,
@@ -109,26 +95,26 @@ function createTab(tg, makeActive = false) {
         pollInterval: null,
         seenEntries: new Set()
     });
-    
+
     if (makeActive) {
         switchTab(tg);
     }
-    // Always start polling for new tabs
+
     startPollingForTG(tg);
 }
 
 function switchTab(tg) {
     if (!tabs.has(tg)) return;
-    
+
     currentTG = tg;
     currentTGEl.textContent = `TG: ${tg}`;
-    
+
     tabs.forEach((data, key) => {
         const isActive = key === tg;
         data.tab.classList.toggle('active', isActive);
         data.panel.classList.toggle('active', isActive);
     });
-    
+
     updateEntryCount(tg);
     updateLastUpdate();
 }
@@ -136,13 +122,13 @@ function switchTab(tg) {
 function removeTG(tg) {
     const data = tabs.get(tg);
     if (!data) return;
-    
+
     if (data.pollInterval) clearInterval(data.pollInterval);
-    
+
     data.tab.remove();
     data.panel.remove();
     tabs.delete(tg);
-    
+
     if (currentTG === tg) {
         const firstTab = tgTabs.querySelector('.tg-tab:not(.add-tab)');
         if (firstTab) {
@@ -158,7 +144,7 @@ function removeTG(tg) {
 function startPollingForTG(tg) {
     const data = tabs.get(tg);
     if (!data) return;
-    
+
     if (data.pollInterval) clearInterval(data.pollInterval);
     data.pollInterval = setInterval(() => fetchDataForTG(tg), POLL_INTERVAL_MS);
     fetchDataForTG(tg);
@@ -167,12 +153,12 @@ function startPollingForTG(tg) {
 async function fetchDataForTG(tg) {
     const data = tabs.get(tg);
     if (!data) return;
-    
+
     try {
-        const url = `${API_BASE}/heard?server=${encodeURIComponent(currentServer)}&tg=${encodeURIComponent(tg)}&since=${data.lastTimestamp}`;
+        const url = `${API_BASE}/heard?tg=${encodeURIComponent(tg)}&since=${data.lastTimestamp}`;
         const resp = await fetch(url);
         const result = await resp.json();
-        
+
         if (result.entries && result.entries.length > 0) {
             result.entries.forEach(entry => addRow(tg, entry));
             data.lastTimestamp = Math.max(data.lastTimestamp, ...result.entries.map(e => e.raw_timestamp));
@@ -187,12 +173,11 @@ async function fetchDataForTG(tg) {
 function addRow(tg, entry) {
     const data = tabs.get(tg);
     if (!data) return;
-    
-    // Create unique key for deduplication
+
     const entryKey = `${entry.dmrid}-${entry.raw_timestamp}-${entry.callsign}`;
     if (data.seenEntries.has(entryKey)) return;
     data.seenEntries.add(entryKey);
-    
+
     const tr = document.createElement('tr');
     tr.className = 'new-entry';
     tr.dataset.dmrid = entry.dmrid;
@@ -207,13 +192,13 @@ function addRow(tg, entry) {
         <td class="dmrid">${escapeHtml(entry.dmrid)}</td>
         <td><span class="mode mode-${getModeClass(entry.mode)}">${escapeHtml(entry.mode || 'DMR')}</span></td>
     `;
-    
+
     data.body.insertBefore(tr, data.body.firstChild);
-    
+
     if (ttsEnabled && entry.callsign) {
         speakCallsign(entry.callsign, entry.name);
     }
-    
+
     setTimeout(() => tr.classList.remove('new-entry'), 2000);
 }
 
@@ -229,14 +214,14 @@ function getModeClass(mode) {
 
 function clearCurrentTab() {
     if (!currentTG) return;
+
     const data = tabs.get(currentTG);
     if (!data) return;
-    
-    // Stop any ongoing speech
+
     if ('speechSynthesis' in window) {
         speechSynthesis.cancel();
     }
-    
+
     data.body.innerHTML = '';
     data.lastTimestamp = 0;
     data.seenEntries.clear();
@@ -250,8 +235,7 @@ function toggleTTS() {
     btnTTS.classList.toggle('btn-tts', ttsEnabled);
     btnTTS.style.background = ttsEnabled ? '#27ae60' : '#95a5a6';
     btnTTS.style.color = 'white';
-    
-    // Stop any ongoing speech when muting
+
     if (!ttsEnabled && 'speechSynthesis' in window) {
         speechSynthesis.cancel();
     }
@@ -259,9 +243,9 @@ function toggleTTS() {
 
 function speakCallsign(callsign, name) {
     if (!('speechSynthesis' in window)) return;
-    
+
     speechSynthesis.cancel();
-    
+
     const utterance = new SpeechSynthesisUtterance(`${callsign}, ${name || ''}`);
     utterance.lang = 'pt-BR';
     utterance.rate = 1;
@@ -276,6 +260,7 @@ function updateEntryCount(tg) {
         entryCountEl.textContent = '0 entradas';
         return;
     }
+
     const count = data.body.children.length;
     entryCountEl.textContent = `${count} entrada${count !== 1 ? 's' : ''}`;
 }
