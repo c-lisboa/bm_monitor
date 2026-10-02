@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brandmeister TG Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📡 Brandmeister TG Monitor</h1>
+            <div class="controls">
+                <div class="control-group">
+                    <label for="serverSelect">Servidor:</label>
+                    <select id="serverSelect">
+                        {% for server in servers %}
+                        <option value="{{ server }}" {% if server == default_server %}selected{% endif %}>{{ server }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="tgInput">Adicionar TG:</label>
+                    <input type="text" id="tgInput" placeholder="Ex: 724, 310, 7242">
+                    <button id="btnAddTG" class="btn">+ Adicionar</button>
+                </div>
+                <div class="control-group">
+                    <button id="btnClear" class="btn btn-danger">Limpar Tela</button>
+                    <button id="btnTTS" class="btn btn-tts" title="Ler chamados">🔊 TTS</button>
+                </div>
+            </div>
+            
+            <div class="tg-tabs" id="tgTabs">
+                <button class="tg-tab add-tab" id="addTabBtn">+ Nova TG</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="status-bar">
+                <span id="currentTG">Nenhuma TG selecionada</span>
+                <span id="lastUpdate">Aguardando...</span>
+                <span id="entryCount">0 entradas</span>
+            </div>
+            
+            <div class="tab-panels" id="tabPanels">
+            </div>
+        </main>
+
+        <footer>
+            <p>Dados via <a href="https://brandmeister.network" target="_blank">Brandmeister Network</a> | Servidor: <span id="currentServer">{{ default_server }}</span></p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
