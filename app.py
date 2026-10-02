@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 
@@ -47,7 +47,8 @@ def parse_heard_entry(entry, target_tg):
     timestamp = entry[3] if entry[3] else entry[2]
     mode = entry[4] if entry[4] else ""
 
-    dt = datetime.fromtimestamp(timestamp) if timestamp else datetime.now()
+    brasilia_tz = timezone(timedelta(hours=-3))
+    dt = datetime.fromtimestamp(timestamp, tz=brasilia_tz) if timestamp else datetime.now(brasilia_tz)
 
     return {
         "callsign": callsign,
