@@ -12,14 +12,6 @@
             <h1>📡 Brandmeister TG Monitor</h1>
             <div class="controls">
                 <div class="control-group">
-                    <label for="serverSelect">Servidor:</label>
-                    <select id="serverSelect">
-                        {% for server in servers %}
-                        <option value="{{ server }}" {% if server == default_server %}selected{% endif %}>{{ server }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="control-group">
                     <label for="tgInput">Adicionar TG:</label>
                     <input type="text" id="tgInput" placeholder="Ex: 724, 310, 7242">
                     <button id="btnAddTG" class="btn">+ Adicionar</button>
@@ -29,7 +21,7 @@
                     <button id="btnTTS" class="btn btn-tts" title="Ler chamados">🔊 TTS</button>
                 </div>
             </div>
-            
+
             <div class="tg-tabs" id="tgTabs">
                 <button class="tg-tab add-tab" id="addTabBtn">+ Nova TG</button>
             </div>
@@ -41,13 +33,13 @@
                 <span id="lastUpdate">Aguardando...</span>
                 <span id="entryCount">0 entradas</span>
             </div>
-            
+
             <div class="tab-panels" id="tabPanels">
             </div>
         </main>
 
         <footer>
-            <p>Dados via <a href="https://brandmeister.network" target="_blank">Brandmeister Network</a> | Servidor: <span id="currentServer">{{ default_server }}</span></p>
+            <p>Dados via <a href="https://brandmeister.network" target="_blank" rel="noopener noreferrer">Brandmeister Network</a></p>
         </footer>
     </div>
 
