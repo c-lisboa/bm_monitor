@@ -1,36 +1,44 @@
-from flask import Flask, render_template, request, jsonify
+from datetime import datetime, timedelta, timezone
+import logging
+import re
+
+from flask import Flask, jsonify, render_template, request
 import requests
-from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 
 BM_SERVER_URL = "https://bm.dvbrazil.com.br/status/extra/heard.php"
+BRASILIA_TZ = timezone(timedelta(hours=-3))
 
 
 def fetch_heard_data(server_url):
-    try:
-        resp = requests.get(server_url, timeout=10)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:
-        app.logger.error(f"Erro ao buscar dados de {server_url}: {e}")
-        return []
+    """Busca os dados e confirma que a resposta tem o formato esperado."""
+    response = requests.get(server_url, timeout=10)
+    response.raise_for_status()
+
+    data = response.json()
+    if not isinstance(data, list):
+        raise ValueError("A resposta do servidor não é uma lista JSON.")
+
+    return data
 
 
 def parse_heard_entry(entry, target_tg):
-    if len(entry) < 26:
+    if not isinstance(entry, (list, tuple)) or len(entry) < 26:
         return None
 
     tg = str(entry[10]) if entry[10] else str(entry[0])
-    target_str = str(target_tg)
-    if tg != target_str:
+    if tg != target_tg:
         return None
 
-    # Formato padrão: [21]=indicativo, [22]=nome, [23]=sobrenome,
-    # [24]=cidade/estado, [25]=país ou informação
-    # Formato Layer4/DMR+: [23]=indicativo, [24]=nome, [25]=None
-    callsign = entry[21] if entry[21] else (entry[23] if len(entry) > 23 and entry[23] else "")
-    name = entry[22] if entry[22] else (entry[24] if len(entry) > 24 and entry[24] else "")
+    # Formato padrão:
+    # [21]=indicativo, [22]=nome, [23]=sobrenome,
+    # [24]=cidade/estado, [25]=país ou informação.
+    #
+    # Formato Layer4/DMR+:
+    # [23]=indicativo, [24]=nome, [25]=None.
+    callsign = entry[21] or (entry[23] if len(entry) > 23 else "")
+    name = entry[22] or (entry[24] if len(entry) > 24 else "")
     surname = entry[23] if entry[23] and entry[21] else ""
     city_state = entry[24] if entry[24] and entry[22] else ""
 
@@ -38,17 +46,21 @@ def parse_heard_entry(entry, target_tg):
     full_name = entry[26] if len(entry) > 26 and entry[26] else ""
 
     country = ""
-    if info_raw and callsign and callsign not in info_raw:
+    if info_raw and callsign and callsign not in str(info_raw):
         country = info_raw
     elif info_raw and not callsign:
         country = info_raw
 
-    dmrid = entry[9] if entry[9] else ""
-    timestamp = entry[3] if entry[3] else entry[2]
-    mode = entry[4] if entry[4] else ""
+    dmrid = entry[9] or ""
+    timestamp_value = entry[3] or entry[2]
+    mode = entry[4] or ""
 
-    brasilia_tz = timezone(timedelta(hours=-3))
-    dt = datetime.fromtimestamp(timestamp, tz=brasilia_tz) if timestamp else datetime.now(brasilia_tz)
+    try:
+        # O timestamp do BrandMeister é esperado em segundos.
+        timestamp = int(float(timestamp_value))
+        dt = datetime.fromtimestamp(timestamp, tz=BRASILIA_TZ)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
 
     return {
         "callsign": callsign,
@@ -60,7 +72,7 @@ def parse_heard_entry(entry, target_tg):
         "dmrid": dmrid,
         "timestamp": dt.strftime("%d/%m/%Y %H:%M:%S"),
         "mode": mode,
-        "raw_timestamp": timestamp
+        "raw_timestamp": timestamp,
     }
 
 
@@ -71,18 +83,41 @@ def index():
 
 @app.route("/api/heard")
 def api_heard():
-    tg = request.args.get("tg", "")
-    since = request.args.get("since", 0, type=int)
+    tg = request.args.get("tg", "").strip()
 
-    data = fetch_heard_data(BM_SERVER_URL)
+    if not re.fullmatch(r"\d{1,20}", tg):
+        return jsonify({"error": "A TG deve conter somente números."}), 400
+
+    try:
+        since = int(request.args.get("since", "0"))
+    except (TypeError, ValueError):
+        since = 0
+
+    since = max(since, 0)
+
+    try:
+        data = fetch_heard_data(BM_SERVER_URL)
+    except (requests.RequestException, ValueError) as error:
+        app.logger.error("Erro ao consultar o BrandMeister: %s", error)
+        return jsonify({"error": "Não foi possível consultar o BrandMeister."}), 502
+    except Exception:
+        app.logger.exception("Erro inesperado ao consultar o BrandMeister.")
+        return jsonify({"error": "Erro inesperado ao consultar o BrandMeister."}), 500
 
     results = []
     for entry in data:
-        parsed = parse_heard_entry(entry, tg)
-        if parsed and parsed["raw_timestamp"] > since:
+        try:
+            parsed = parse_heard_entry(entry, tg)
+        except (IndexError, TypeError, ValueError):
+            app.logger.warning("Registro inválido recebido do BrandMeister.")
+            continue
+
+        # Inclui novamente o timestamp mais recente. O navegador elimina
+        # duplicatas, e assim não perde registros com timestamps iguais.
+        if parsed and parsed["raw_timestamp"] >= since:
             results.append(parsed)
 
-    results.sort(key=lambda x: x["raw_timestamp"], reverse=True)
+    results.sort(key=lambda item: item["raw_timestamp"], reverse=True)
     return jsonify({"entries": results, "tg": tg})
 
 
