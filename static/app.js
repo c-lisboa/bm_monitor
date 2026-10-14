@@ -3,7 +3,7 @@ const POLL_INTERVAL_MS = 5000;
 const MAX_ROWS_PER_TG = 200;
 const MAX_SEEN_KEYS_PER_TG = 1000;
 
-const tabs = new Map(); // tg -> dados da aba
+const tabs = new Map(); // TG -> dados da aba
 let currentTG = '';
 let ttsEnabled = true;
 
@@ -34,12 +34,22 @@ function init() {
         const tab = event.target.closest('.tg-tab');
         if (!tab || tab.classList.contains('add-tab')) return;
 
-        if (event.target.classList.contains('close-tab')) {
+        if (event.target.closest('.close-tab')) {
             event.stopPropagation();
             removeTG(tab.dataset.tg);
         } else {
             switchTab(tab.dataset.tg);
         }
+    });
+
+    tabPanels.addEventListener('click', (event) => {
+        const button = event.target.closest('.view-button');
+        if (!button) return;
+
+        const panel = button.closest('.tab-panel');
+        if (!panel) return;
+
+        setPanelView(panel, button.dataset.view);
     });
 
     currentTGEl.textContent = 'Nenhuma TG selecionada';
@@ -86,33 +96,103 @@ function createTab(tg, makeActive = false) {
     panel.dataset.tg = tg;
 
     panel.innerHTML = `
-        <table class="heardTable">
-            <thead>
-                <tr>
-                    <th>Data/Hora</th>
-                    <th>Indicativo</th>
-                    <th>Nome</th>
-                    <th>Sobrenome</th>
-                    <th>Cidade/Estado</th>
-                    <th>País</th>
-                    <th>DMR ID</th>
-                    <th>Modo</th>
-                </tr>
-            </thead>
-            <tbody class="heardBody"></tbody>
-        </table>
+        <div class="view-buttons" role="group" aria-label="Visualização da TG ${tg}">
+            <button class="view-button active" type="button" data-view="calls">
+                Chamadas
+            </button>
+            <button class="view-button" type="button" data-view="first">
+                Primeira conexão
+            </button>
+            <button class="view-button" type="button" data-view="last">
+                Última conexão
+            </button>
+        </div>
+
+        <section class="view-section active" data-view-section="calls">
+            <div class="table-wrapper">
+                <table class="heardTable">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Indicativo</th>
+                            <th>Nome</th>
+                            <th>Sobrenome</th>
+                            <th>Cidade/Estado</th>
+                            <th>País</th>
+                            <th>DMR ID</th>
+                            <th>Modo</th>
+                        </tr>
+                    </thead>
+                    <tbody class="heardBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="view-section" data-view-section="first">
+            <p class="list-description">
+                Um registro por radioamador, usando a primeira conexão observada
+                nesta rodada.
+            </p>
+            <div class="table-wrapper">
+                <table class="heardTable">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora da primeira conexão</th>
+                            <th>Indicativo</th>
+                            <th>Nome</th>
+                            <th>Sobrenome</th>
+                            <th>Cidade/Estado</th>
+                            <th>País</th>
+                            <th>DMR ID</th>
+                        </tr>
+                    </thead>
+                    <tbody class="firstConnectionsBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="view-section" data-view-section="last">
+            <p class="list-description">
+                Um registro por radioamador, usando a última conexão observada
+                nesta rodada.
+            </p>
+            <div class="table-wrapper">
+                <table class="heardTable">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora da última conexão</th>
+                            <th>Indicativo</th>
+                            <th>Nome</th>
+                            <th>Sobrenome</th>
+                            <th>Cidade/Estado</th>
+                            <th>País</th>
+                            <th>DMR ID</th>
+                        </tr>
+                    </thead>
+                    <tbody class="lastConnectionsBody"></tbody>
+                </table>
+            </div>
+        </section>
     `;
 
     tabPanels.appendChild(panel);
+
+    const roundStartedAt = Math.floor(Date.now() / 1000);
 
     tabs.set(tg, {
         tab,
         panel,
         body: panel.querySelector('.heardBody'),
-        lastTimestamp: 0,
+        firstConnectionsBody: panel.querySelector('.firstConnectionsBody'),
+        lastConnectionsBody: panel.querySelector('.lastConnectionsBody'),
+        lastTimestamp: roundStartedAt,
+        roundStartedAt,
+        roundId: 0,
         pollInterval: null,
         seenEntries: new Set(),
         seenQueue: [],
+        firstConnections: new Map(),
+        lastConnections: new Map(),
         inFlight: false
     });
 
@@ -121,6 +201,19 @@ function createTab(tg, makeActive = false) {
     }
 
     startPollingForTG(tg);
+}
+
+function setPanelView(panel, view) {
+    panel.querySelectorAll('.view-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.view === view);
+    });
+
+    panel.querySelectorAll('.view-section').forEach((section) => {
+        section.classList.toggle(
+            'active',
+            section.dataset.viewSection === view
+        );
+    });
 }
 
 function switchTab(tg) {
@@ -171,7 +264,11 @@ function startPollingForTG(tg) {
         clearInterval(data.pollInterval);
     }
 
-    data.pollInterval = setInterval(() => fetchDataForTG(tg), POLL_INTERVAL_MS);
+    data.pollInterval = setInterval(
+        () => fetchDataForTG(tg),
+        POLL_INTERVAL_MS
+    );
+
     fetchDataForTG(tg);
 }
 
@@ -180,33 +277,48 @@ async function fetchDataForTG(tg) {
     if (!data || data.inFlight) return;
 
     data.inFlight = true;
+    const requestRoundId = data.roundId;
 
     try {
-        const url = `${API_BASE}/heard?tg=${encodeURIComponent(tg)}&since=${data.lastTimestamp}`;
+        const url =
+            `${API_BASE}/heard?tg=${encodeURIComponent(tg)}` +
+            `&since=${data.lastTimestamp}`;
+
         const response = await fetch(url);
 
         if (!response.ok) {
             let message = 'Falha ao consultar o BrandMeister.';
+
             try {
                 const errorResult = await response.json();
                 if (errorResult.error) message = errorResult.error;
             } catch (_) {
                 // Mantém a mensagem padrão se a resposta não for JSON.
             }
+
             throw new Error(message);
         }
 
         const result = await response.json();
 
-        if (result.entries && result.entries.length > 0) {
-            result.entries.forEach((entry) => addRow(tg, entry));
+        // Ignora respostas de uma rodada anterior ou de uma TG já removida.
+        if (!tabs.has(tg) || data.roundId !== requestRoundId) return;
+
+        if (Array.isArray(result.entries) && result.entries.length > 0) {
+            result.entries.forEach((entry) => {
+                addRow(tg, entry);
+                updateConnectionLists(tg, entry);
+            });
 
             const timestamps = result.entries
                 .map((entry) => Number(entry.raw_timestamp))
                 .filter(Number.isFinite);
 
             if (timestamps.length > 0) {
-                data.lastTimestamp = Math.max(data.lastTimestamp, ...timestamps);
+                data.lastTimestamp = Math.max(
+                    data.lastTimestamp,
+                    ...timestamps
+                );
             }
 
             updateLastUpdate();
@@ -215,8 +327,13 @@ async function fetchDataForTG(tg) {
         updateEntryCount(tg);
         setApiStatus('Conectado ao BrandMeister', 'success');
     } catch (error) {
-        console.error(`Erro ao buscar dados para TG ${tg}:`, error);
-        setApiStatus(error.message || 'Erro de conexão com o BrandMeister.', 'error');
+        if (tabs.has(tg) && data.roundId === requestRoundId) {
+            console.error(`Erro ao buscar dados para TG ${tg}:`, error);
+            setApiStatus(
+                error.message || 'Erro de conexão com o BrandMeister.',
+                'error'
+            );
+        }
     } finally {
         data.inFlight = false;
     }
@@ -226,7 +343,9 @@ function addRow(tg, entry) {
     const data = tabs.get(tg);
     if (!data) return;
 
-    const entryKey = `${entry.dmrid}-${entry.raw_timestamp}-${entry.callsign}`;
+    const entryKey =
+        `${entry.dmrid || ''}-${entry.raw_timestamp}-${entry.callsign || ''}`;
+
     if (data.seenEntries.has(entryKey)) return;
 
     data.seenEntries.add(entryKey);
@@ -251,7 +370,11 @@ function addRow(tg, entry) {
         <td>${escapeHtml(entry.city_state)}</td>
         <td>${escapeHtml(entry.country)}</td>
         <td class="dmrid">${escapeHtml(entry.dmrid)}</td>
-        <td><span class="mode mode-${getModeClass(entry.mode)}">${escapeHtml(entry.mode || 'DMR')}</span></td>
+        <td>
+            <span class="mode mode-${getModeClass(entry.mode)}">
+                ${escapeHtml(entry.mode || 'DMR')}
+            </span>
+        </td>
     `;
 
     data.body.insertBefore(tr, data.body.firstChild);
@@ -265,6 +388,90 @@ function addRow(tg, entry) {
     }
 
     setTimeout(() => tr.classList.remove('new-entry'), 2000);
+}
+
+function updateConnectionLists(tg, entry) {
+    const data = tabs.get(tg);
+    if (!data) return;
+
+    const callsign = String(entry.callsign || '').trim();
+    const dmrid = String(entry.dmrid || '').trim();
+
+    // O indicativo é a identificação preferida; usa o DMR ID como alternativa.
+    const key = callsign
+        ? `callsign:${callsign.toUpperCase()}`
+        : dmrid
+            ? `dmrid:${dmrid}`
+            : '';
+
+    // Sem indicativo e sem DMR ID, o registro não entra nas listas únicas.
+    if (!key) return;
+
+    const timestamp = Number(entry.raw_timestamp);
+    if (!Number.isFinite(timestamp)) return;
+
+    const firstEntry = data.firstConnections.get(key);
+    if (!firstEntry || timestamp < Number(firstEntry.raw_timestamp)) {
+        data.firstConnections.set(key, entry);
+    }
+
+    const lastEntry = data.lastConnections.get(key);
+    if (!lastEntry || timestamp >= Number(lastEntry.raw_timestamp)) {
+        data.lastConnections.set(key, entry);
+    }
+
+    renderConnectionTable(
+        data.firstConnectionsBody,
+        data.firstConnections,
+        'asc'
+    );
+
+    renderConnectionTable(
+        data.lastConnectionsBody,
+        data.lastConnections,
+        'desc'
+    );
+}
+
+function renderConnectionTable(tbody, entriesMap, order) {
+    const entries = Array.from(entriesMap.values());
+
+    entries.sort((a, b) => {
+        const difference =
+            Number(a.raw_timestamp) - Number(b.raw_timestamp);
+
+        return order === 'asc' ? difference : -difference;
+    });
+
+    const rows = document.createDocumentFragment();
+
+    entries.forEach((entry) => {
+        const tr = document.createElement('tr');
+
+        const values = [
+            entry.timestamp,
+            entry.callsign,
+            entry.name,
+            entry.surname,
+            entry.city_state,
+            entry.country,
+            entry.dmrid
+        ];
+
+        values.forEach((value, index) => {
+            const td = document.createElement('td');
+            td.textContent = value == null ? '' : String(value);
+
+            if (index === 1) td.className = 'callsign';
+            if (index === 6) td.className = 'dmrid';
+
+            tr.appendChild(td);
+        });
+
+        rows.appendChild(tr);
+    });
+
+    tbody.replaceChildren(rows);
 }
 
 function getModeClass(mode) {
@@ -289,10 +496,25 @@ function clearCurrentTab() {
         speechSynthesis.cancel();
     }
 
-    // Mantém o timestamp e as chaves já vistas para que registros antigos
-    // não reapareçam após limpar a tela.
-    data.body.innerHTML = '';
+    // Invalida uma consulta iniciada antes da limpeza.
+    data.roundId += 1;
+
+    // A limpeza inicia uma nova rodada para esta TG.
+    data.roundStartedAt = Math.floor(Date.now() / 1000);
+    data.lastTimestamp = data.roundStartedAt;
+
+    data.seenEntries.clear();
+    data.seenQueue = [];
+    data.firstConnections.clear();
+    data.lastConnections.clear();
+
+    data.body.replaceChildren();
+    data.firstConnectionsBody.replaceChildren();
+    data.lastConnectionsBody.replaceChildren();
+
     updateEntryCount(currentTG);
+    updateLastUpdate();
+    setApiStatus('Nova rodada iniciada. Aguardando chamadas...', '');
 }
 
 function toggleTTS() {
@@ -310,13 +532,15 @@ function toggleTTS() {
 function speakCallsign(callsign, name) {
     if (!('speechSynthesis' in window)) return;
 
-    const utterance = new SpeechSynthesisUtterance(`${callsign}, ${name || ''}`);
+    const utterance = new SpeechSynthesisUtterance(
+        `${callsign}, ${name || ''}`
+    );
+
     utterance.lang = 'pt-BR';
     utterance.rate = 1;
     utterance.pitch = 1;
     utterance.volume = 0.8;
 
-    // Não cancela a fala anterior; chamadas recebidas em sequência entram na fila.
     speechSynthesis.speak(utterance);
 }
 
@@ -329,7 +553,8 @@ function updateEntryCount(tg) {
     }
 
     const count = data.body.children.length;
-    entryCountEl.textContent = `${count} entrada${count !== 1 ? 's' : ''}`;
+    entryCountEl.textContent =
+        `${count} entrada${count !== 1 ? 's' : ''}`;
 }
 
 function updateLastUpdate() {
