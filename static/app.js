@@ -2,6 +2,7 @@ const API_BASE = '/api';
 const POLL_INTERVAL_MS = 5000;
 const MAX_ROWS_PER_TG = 200;
 const MAX_SEEN_KEYS_PER_TG = 1000;
+const CALL_DUPLICATE_WINDOW_SECONDS = 10;
 
 const tabs = new Map(); // TG -> dados da aba
 let currentTG = '';
@@ -195,7 +196,8 @@ function createTab(tg, makeActive = false) {
         firstConnections: new Map(),
         lastConnections: new Map(),
         callsignIdentity: new Map(),
-        dmridIdentity: new Map()
+        dmridIdentity: new Map(),
+        lastDisplayedCallByIdentity: new Map()
     });
 
     if (makeActive) switchTab(tg);
@@ -300,14 +302,23 @@ async function pollAllActiveTGs() {
             }
 
             const baseline = data.lastTimestamp;
-            const tgEntries = entries.filter((entry) => {
-                return (
-                    String(entry.tg) === tg &&
-                    Number(entry.raw_timestamp) >= baseline
-                );
-            });
+            const tgEntries = entries
+                .filter((entry) => {
+                    return (
+                        String(entry.tg) === tg &&
+                        Number(entry.raw_timestamp) >= baseline
+                    );
+                })
+                .sort((a, b) => {
+                    return (
+                        Number(a.raw_timestamp) -
+                        Number(b.raw_timestamp)
+                    );
+                });
 
             tgEntries.forEach((entry) => {
+                // As listas de conexão recebem todos os registros, mesmo que
+                // uma chamada seja suprimida na aba "Chamadas".
                 updateConnectionLists(data, entry);
                 addRow(tg, entry);
             });
@@ -350,7 +361,11 @@ function addRow(tg, entry) {
     const identityKey =
         (callsign && data.callsignIdentity.get(callsign)) ||
         (dmrid && data.dmridIdentity.get(dmrid)) ||
-        (callsign ? `callsign:${callsign}` : dmrid ? `dmrid:${dmrid}` : '');
+        (callsign
+            ? `callsign:${callsign}`
+            : dmrid
+                ? `dmrid:${dmrid}`
+                : '');
 
     const entryKey = identityKey
         ? `${timestamp}-${identityKey}`
@@ -358,12 +373,23 @@ function addRow(tg, entry) {
 
     if (data.seenEntries.has(entryKey)) return;
 
-    data.seenEntries.add(entryKey);
-    data.seenQueue.push(entryKey);
+    rememberSeenEntry(data, entryKey);
 
-    if (data.seenQueue.length > MAX_SEEN_KEYS_PER_TG) {
-        const oldestKey = data.seenQueue.shift();
-        data.seenEntries.delete(oldestKey);
+    // Suprime chamadas da mesma identidade dentro da janela de 10 segundos.
+    // A atualização das listas de primeira/última conexão ocorre antes daqui.
+    if (identityKey && Number.isFinite(timestamp)) {
+        const lastDisplayedTimestamp =
+            data.lastDisplayedCallByIdentity.get(identityKey);
+
+        if (
+            Number.isFinite(lastDisplayedTimestamp) &&
+            Math.abs(timestamp - lastDisplayedTimestamp) <=
+                CALL_DUPLICATE_WINDOW_SECONDS
+        ) {
+            return;
+        }
+
+        data.lastDisplayedCallByIdentity.set(identityKey, timestamp);
     }
 
     const tr = document.createElement('tr');
@@ -400,6 +426,16 @@ function addRow(tg, entry) {
     setTimeout(() => tr.classList.remove('new-entry'), 2000);
 }
 
+function rememberSeenEntry(data, entryKey) {
+    data.seenEntries.add(entryKey);
+    data.seenQueue.push(entryKey);
+
+    if (data.seenQueue.length > MAX_SEEN_KEYS_PER_TG) {
+        const oldestKey = data.seenQueue.shift();
+        data.seenEntries.delete(oldestKey);
+    }
+}
+
 function updateConnectionLists(data, entry) {
     const callsign = normalizeCallsign(entry.callsign);
     const dmrid = normalizeDmrid(entry.dmrid);
@@ -416,7 +452,7 @@ function updateConnectionLists(data, entry) {
 
     // Prefere a identidade já conhecida pelo indicativo; caso contrário,
     // reutiliza a identidade associada ao DMR ID.
-    let identityKey =
+    const identityKey =
         callsignKey ||
         dmridKey ||
         (callsign ? `callsign:${callsign}` : `dmrid:${dmrid}`);
@@ -491,6 +527,25 @@ function mergeIdentity(data, targetKey, sourceKey) {
     data.dmridIdentity.forEach((key, alias) => {
         if (key === sourceKey) data.dmridIdentity.set(alias, targetKey);
     });
+
+    const sourceDisplayedTimestamp =
+        data.lastDisplayedCallByIdentity.get(sourceKey);
+    const targetDisplayedTimestamp =
+        data.lastDisplayedCallByIdentity.get(targetKey);
+
+    if (Number.isFinite(sourceDisplayedTimestamp)) {
+        if (
+            !Number.isFinite(targetDisplayedTimestamp) ||
+            sourceDisplayedTimestamp > targetDisplayedTimestamp
+        ) {
+            data.lastDisplayedCallByIdentity.set(
+                targetKey,
+                sourceDisplayedTimestamp
+            );
+        }
+
+        data.lastDisplayedCallByIdentity.delete(sourceKey);
+    }
 }
 
 function renderConnectionTable(tbody, entriesMap, order) {
@@ -573,6 +628,7 @@ function clearCurrentTab() {
     data.lastConnections.clear();
     data.callsignIdentity.clear();
     data.dmridIdentity.clear();
+    data.lastDisplayedCallByIdentity.clear();
 
     data.body.replaceChildren();
     data.firstConnectionsBody.replaceChildren();
