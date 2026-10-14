@@ -23,12 +23,13 @@ def fetch_heard_data(server_url):
     return data
 
 
-def parse_heard_entry(entry, target_tg):
+def parse_heard_entry(entry, target_tg=None):
     if not isinstance(entry, (list, tuple)) or len(entry) < 26:
         return None
 
     tg = str(entry[10]) if entry[10] else str(entry[0])
-    if tg != target_tg:
+
+    if target_tg is not None and tg != target_tg:
         return None
 
     # Formato padrão:
@@ -56,13 +57,13 @@ def parse_heard_entry(entry, target_tg):
     mode = entry[4] or ""
 
     try:
-        # O timestamp do BrandMeister é esperado em segundos.
         timestamp = int(float(timestamp_value))
         dt = datetime.fromtimestamp(timestamp, tz=BRASILIA_TZ)
     except (TypeError, ValueError, OverflowError, OSError):
         return None
 
     return {
+        "tg": tg,
         "callsign": callsign,
         "name": name,
         "surname": surname,
@@ -83,10 +84,13 @@ def index():
 
 @app.route("/api/heard")
 def api_heard():
-    tg = request.args.get("tg", "").strip()
-
-    if not re.fullmatch(r"\d{1,20}", tg):
-        return jsonify({"error": "A TG deve conter somente números."}), 400
+    # O parâmetro tg é opcional. Sem ele, a resposta inclui todas as TGs
+    # para que o navegador possa distribuí-las após uma única consulta.
+    tg = request.args.get("tg")
+    if tg is not None:
+        tg = tg.strip()
+        if not re.fullmatch(r"\d{1,20}", tg):
+            return jsonify({"error": "A TG deve conter somente números."}), 400
 
     try:
         since = int(request.args.get("since", "0"))
@@ -105,6 +109,7 @@ def api_heard():
         return jsonify({"error": "Erro inesperado ao consultar o BrandMeister."}), 500
 
     results = []
+
     for entry in data:
         try:
             parsed = parse_heard_entry(entry, tg)
@@ -112,8 +117,6 @@ def api_heard():
             app.logger.warning("Registro inválido recebido do BrandMeister.")
             continue
 
-        # Inclui novamente o timestamp mais recente. O navegador elimina
-        # duplicatas, e assim não perde registros com timestamps iguais.
         if parsed and parsed["raw_timestamp"] >= since:
             results.append(parsed)
 
