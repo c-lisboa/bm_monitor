@@ -22,7 +22,7 @@ header {
     border-radius: 8px;
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 header h1 {
@@ -79,7 +79,7 @@ header h1 {
 
 .btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .btn:active {
@@ -184,10 +184,18 @@ header h1 {
     background: #fff;
     border-radius: 8px;
     margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     font-weight: 500;
     color: #2c3e50;
     flex-wrap: wrap;
+}
+
+.api-status.success {
+    color: #218838;
+}
+
+.api-status.error {
+    color: #c0392b;
 }
 
 .tab-panels {
@@ -204,8 +212,15 @@ header h1 {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .heardTable {
@@ -214,7 +229,7 @@ header h1 {
     background: #fff;
     border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .heardTable th,
@@ -246,8 +261,13 @@ header h1 {
 }
 
 @keyframes highlightRow {
-    0% { background: #fff3cd; }
-    100% { background: #fff; }
+    0% {
+        background: #fff3cd;
+    }
+
+    100% {
+        background: #fff;
+    }
 }
 
 .heardTable td:first-child {
@@ -277,12 +297,35 @@ header h1 {
     text-transform: uppercase;
 }
 
-.mode-dmr { background: #3498db; color: white; }
-.mode-ydsf { background: #9b59b6; color: white; }
-.mode-p25 { background: #e67e22; color: white; }
-.mode-nxdn { background: #1abc9c; color: white; }
-.mode-m17 { background: #e74c3c; color: white; }
-.mode-unknown { background: #95a5a6; color: white; }
+.mode-dmr {
+    background: #3498db;
+    color: white;
+}
+
+.mode-ydsf {
+    background: #9b59b6;
+    color: white;
+}
+
+.mode-p25 {
+    background: #e67e22;
+    color: white;
+}
+
+.mode-nxdn {
+    background: #1abc9c;
+    color: white;
+}
+
+.mode-m17 {
+    background: #e74c3c;
+    color: white;
+}
+
+.mode-unknown {
+    background: #95a5a6;
+    color: white;
+}
 
 .empty-state {
     text-align: center;
@@ -311,30 +354,30 @@ footer a:hover {
     .container {
         padding: 10px;
     }
-    
+
     .controls {
         flex-direction: column;
         align-items: stretch;
     }
-    
+
     .control-group {
         width: 100%;
     }
-    
+
     .tg-tabs {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
-    
+
     .heardTable {
         font-size: 0.85rem;
     }
-    
+
     .heardTable th,
     .heardTable td {
         padding: 8px 10px;
     }
-    
+
     .status-bar {
         flex-wrap: wrap;
     }
