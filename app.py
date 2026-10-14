@@ -162,10 +162,7 @@ def _radioid_refresh_worker():
 
 def start_radioid_refresh_thread():
     # Evita iniciar duas threads no reloader de desenvolvimento do Flask.
-    if (
-        app.debug
-        and os.environ.get("WERKZEUG_RUN_MAIN") != "true"
-    ):
+    if app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         return
 
     thread = threading.Thread(
