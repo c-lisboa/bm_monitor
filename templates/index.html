@@ -10,12 +10,20 @@
     <div class="container">
         <header>
             <h1>📡 Brandmeister TG Monitor</h1>
+
             <div class="controls">
                 <div class="control-group">
                     <label for="tgInput">Adicionar TG:</label>
-                    <input type="text" id="tgInput" placeholder="Ex: 724, 310, 7242">
+                    <input
+                        type="text"
+                        id="tgInput"
+                        placeholder="Ex: 724, 310, 7242"
+                        inputmode="numeric"
+                        maxlength="20"
+                    >
                     <button id="btnAddTG" class="btn">+ Adicionar</button>
                 </div>
+
                 <div class="control-group">
                     <button id="btnClear" class="btn btn-danger">Limpar Tela</button>
                     <button id="btnTTS" class="btn btn-tts" title="Ler chamados">🔊 TTS</button>
@@ -32,14 +40,21 @@
                 <span id="currentTG">Nenhuma TG selecionada</span>
                 <span id="lastUpdate">Aguardando...</span>
                 <span id="entryCount">0 entradas</span>
+                <span id="apiStatus" class="api-status" role="status" aria-live="polite">
+                    Aguardando consulta...
+                </span>
             </div>
 
-            <div class="tab-panels" id="tabPanels">
-            </div>
+            <div class="tab-panels" id="tabPanels"></div>
         </main>
 
         <footer>
-            <p>Dados via <a href="https://brandmeister.network" target="_blank" rel="noopener noreferrer">Brandmeister Network</a></p>
+            <p>
+                Dados via
+                <a href="https://brandmeister.network" target="_blank" rel="noopener noreferrer">
+                    Brandmeister Network
+                </a>
+            </p>
         </footer>
     </div>
 
