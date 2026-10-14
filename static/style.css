@@ -67,6 +67,11 @@ header h1 {
     box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 
+.action-group {
+    flex-direction: row;
+    align-items: end;
+}
+
 .btn {
     padding: 10px 20px;
     border: none;
@@ -211,6 +216,51 @@ header h1 {
     animation: fadeIn 0.2s;
 }
 
+.view-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.view-button {
+    padding: 9px 14px;
+    background: #fff;
+    color: #2c3e50;
+    border: 1px solid #cbd2d9;
+    border-radius: 5px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.view-button:hover {
+    background: #edf4f8;
+    border-color: #3498db;
+}
+
+.view-button.active {
+    background: #3498db;
+    color: #fff;
+    border-color: #3498db;
+}
+
+.view-section {
+    display: none;
+}
+
+.view-section.active {
+    display: block;
+    animation: fadeIn 0.2s;
+}
+
+.list-description {
+    color: #555;
+    margin: 0 0 10px;
+    font-size: 0.9rem;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -223,12 +273,16 @@ header h1 {
     }
 }
 
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: 8px;
+}
+
 .heardTable {
     width: 100%;
     border-collapse: collapse;
     background: #fff;
-    border-radius: 8px;
-    overflow: hidden;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -245,6 +299,7 @@ header h1 {
     font-weight: 600;
     position: sticky;
     top: 0;
+    white-space: nowrap;
 }
 
 .heardTable tbody tr {
@@ -364,12 +419,37 @@ footer a:hover {
         width: 100%;
     }
 
+    .action-group {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .action-group .btn {
+        flex: 1;
+    }
+
     .tg-tabs {
         overflow-x: auto;
+        flex-wrap: nowrap;
         -webkit-overflow-scrolling: touch;
     }
 
+    .tg-tab {
+        flex-shrink: 0;
+    }
+
+    .view-buttons {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .view-button {
+        width: 100%;
+        text-align: left;
+    }
+
     .heardTable {
+        min-width: 850px;
         font-size: 0.85rem;
     }
 
@@ -379,6 +459,6 @@ footer a:hover {
     }
 
     .status-bar {
-        flex-wrap: wrap;
+        gap: 8px 16px;
     }
 }
